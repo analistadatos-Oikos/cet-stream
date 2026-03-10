@@ -4,25 +4,28 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Call CET Stream</title>
-  <script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #report-container { position: fixed; inset: 0; width: 100%; height: 100%; }
-    #report-container iframe { border: none !important; }
+
+    .pbi-frame {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      border: none; display: block;
+      transition: opacity 0.8s ease;
+    }
+    .pbi-frame.hidden { opacity: 0; pointer-events: none; }
+    .pbi-frame.visible { opacity: 1; pointer-events: all; }
+
     #badge {
       position: fixed; bottom: 18px; right: 18px; z-index: 999;
       background: rgba(10,14,30,0.82); backdrop-filter: blur(10px);
       border: 1px solid rgba(92,107,192,0.35); border-radius: 10px;
       padding: 7px 13px; display: flex; align-items: center; gap: 9px;
       font-family: 'Segoe UI', sans-serif; font-size: 0.72rem;
-      color: rgba(232,234,246,0.75); letter-spacing: 0.06em;
-      user-select: none; transition: opacity 0.3s;
+      color: rgba(232,234,246,0.75); letter-spacing: 0.06em; user-select: none;
     }
-    #badge:hover { opacity: 0.4; }
     .dot {
       width: 8px; height: 8px; border-radius: 50%; background: #4caf50;
-      box-shadow: 0 0 0 0 rgba(76,175,80,0.7);
       animation: pulse 1.4s ease infinite; flex-shrink: 0;
     }
     @keyframes pulse {
@@ -30,19 +33,25 @@
       70%  { box-shadow: 0 0 0 7px rgba(76,175,80,0); }
       100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); }
     }
-    .ring-wrap { position: relative; width: 22px; height: 22px; flex-shrink: 0; }
+    .ring-wrap { width: 22px; height: 22px; flex-shrink: 0; }
     .ring-wrap svg { transform: rotate(-90deg); }
     .ring-bg  { fill: none; stroke: rgba(92,107,192,0.18); stroke-width: 2.5; }
     .ring-arc {
       fill: none; stroke: #5c6bc0; stroke-width: 2.5; stroke-linecap: round;
       stroke-dasharray: 56.5; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;
     }
-    #status-txt { font-size: 0.65rem; color: rgba(232,234,246,0.45); }
   </style>
 </head>
 <body>
 
-  <div id="report-container"></div>
+  <!-- Dos iframes apilados — se alternan sin parpadeo -->
+  <iframe id="frame-a" class="pbi-frame visible"
+    src="https://app.powerbi.com/reportEmbed?reportId=bfdf7542-7321-4464-9de3-49d2a0e2256b&autoAuth=true&ctid=fe750c00-52ec-499e-969c-4d4c3900969f"
+    allowfullscreen loading="eager"></iframe>
+
+  <iframe id="frame-b" class="pbi-frame hidden"
+    src=""
+    allowfullscreen loading="eager"></iframe>
 
   <div id="badge">
     <div class="dot"></div>
@@ -54,54 +63,50 @@
       </svg>
     </div>
     <span>Refresh en <span id="countdown-txt">60</span>s</span>
-    <span id="status-txt"></span>
   </div>
 
   <script>
-    const REPORT_ID  = 'bfdf7542-7321-4464-9de3-49d2a0e2256b';
-    const TENANT_ID  = 'fe750c00-52ec-499e-969c-4d4c3900969f';
-    const INTERVAL   = 60;
-    const CIRCUMF    = 56.5;
+    const PBI_URL  = 'https://app.powerbi.com/reportEmbed?reportId=bfdf7542-7321-4464-9de3-49d2a0e2256b&autoAuth=true&ctid=fe750c00-52ec-499e-969c-4d4c3900969f';
+    const INTERVAL = 60;
+    const CIRCUMF  = 56.5;
 
-    // Embed con SDK de Power BI
-    const models    = window['powerbi-client'].models;
-    const container = document.getElementById('report-container');
-
-    const config = {
-      type: 'report',
-      id: REPORT_ID,
-      embedUrl: `https://app.powerbi.com/reportEmbed?reportId=${REPORT_ID}&ctid=${TENANT_ID}`,
-      accessToken: undefined,        // usará la sesión del navegador
-      tokenType: models.TokenType.Aad,
-      settings: {
-        panes: { filters: { visible: false }, pageNavigation: { visible: true } },
-        background: models.BackgroundType.Transparent,
-      }
-    };
-
-    const report = window.powerbi.embed(container, config);
-
-    // Cuenta regresiva y refresh SIN parpadeo
+    const frameA   = document.getElementById('frame-a');
+    const frameB   = document.getElementById('frame-b');
     const arcEl    = document.getElementById('ring-arc');
     const countEl  = document.getElementById('countdown-txt');
-    const statusEl = document.getElementById('status-txt');
+
     let remaining  = INTERVAL;
+    let activeFrame = 'a'; // cuál iframe está visible ahora
 
     function updateRing(sec) {
       arcEl.style.strokeDashoffset = CIRCUMF * (1 - sec / INTERVAL);
       countEl.textContent = sec;
     }
 
-    async function doRefresh() {
+    function doRefresh() {
       remaining = INTERVAL;
       updateRing(INTERVAL);
-      statusEl.textContent = '↻';
-      try {
-        await report.refresh();          // 🔑 Refresca SOLO los datos, sin recargar iframe
-        statusEl.textContent = '✓';
-        setTimeout(() => statusEl.textContent = '', 2000);
-      } catch(e) {
-        statusEl.textContent = '!';
+
+      if (activeFrame === 'a') {
+        // Carga B en el fondo silenciosamente
+        frameB.src = PBI_URL;
+        frameB.onload = () => {
+          // Cuando B cargó, swap suave
+          frameA.classList.remove('visible'); frameA.classList.add('hidden');
+          frameB.classList.remove('hidden');  frameB.classList.add('visible');
+          activeFrame = 'b';
+          // Limpia A para que no consuma recursos
+          setTimeout(() => { frameA.src = ''; }, 1000);
+        };
+      } else {
+        // Carga A en el fondo
+        frameA.src = PBI_URL;
+        frameA.onload = () => {
+          frameB.classList.remove('visible'); frameB.classList.add('hidden');
+          frameA.classList.remove('hidden');  frameA.classList.add('visible');
+          activeFrame = 'a';
+          setTimeout(() => { frameB.src = ''; }, 1000);
+        };
       }
     }
 
@@ -112,5 +117,7 @@
       else updateRing(remaining);
     }, 1000);
   </script>
+</body>
+</html>
 </body>
 </html>
