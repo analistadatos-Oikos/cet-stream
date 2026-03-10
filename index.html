@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Call CET Stream</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #pbi-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: none; display: block; }
+    #badge { position: fixed; bottom: 18px; right: 18px; z-index: 999; background: rgba(10,14,30,0.82); backdrop-filter: blur(10px); border: 1px solid rgba(92,107,192,0.35); border-radius: 10px; padding: 7px 13px; display: flex; align-items: center; gap: 9px; font-family: 'Segoe UI', sans-serif; font-size: 0.72rem; color: rgba(232,234,246,0.75); letter-spacing: 0.06em; user-select: none; transition: opacity 0.3s; }
+    #badge:hover { opacity: 0.4; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; box-shadow: 0 0 0 0 rgba(76,175,80,0.7); animation: pulse 1.4s ease infinite; flex-shrink: 0; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(76,175,80,0.7); } 70% { box-shadow: 0 0 0 7px rgba(76,175,80,0); } 100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); } }
+    .ring-wrap { position: relative; width: 22px; height: 22px; flex-shrink: 0; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg  { fill: none; stroke: rgba(92,107,192,0.18); stroke-width: 2.5; }
+    .ring-arc { fill: none; stroke: #5c6bc0; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 56.5; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+    #countdown-txt { font-variant-numeric: tabular-nums; min-width: 22px; text-align: center; }
+    #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 998; transition: opacity 0.15s ease; }
+    #flash.go { opacity: 0.12; }
+  </style>
+</head>
+<body>
+  <div id="flash"></div>
+  <iframe id="pbi-frame" title="Call CET Stream"
+    src="https://app.powerbi.com/groups/me/reports/bfdf7542-7321-4464-9de3-49d2a0e2256b/866f42491c8aaa825e2c?experience=power-bi"
+    allowfullscreen="true" loading="eager"></iframe>
+  <div id="badge">
+    <div class="dot"></div>
+    <span>LIVE</span>
+    <div class="ring-wrap">
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <circle class="ring-bg" cx="11" cy="11" r="9"/>
+        <circle class="ring-arc" cx="11" cy="11" r="9" id="ring-arc"/>
+      </svg>
+    </div>
+    <span>Refresh en <span id="countdown-txt">60</span>s</span>
+  </div>
+  <script>
+    const INTERVAL = 60;
+    const CIRCUMF  = 56.5;
+    const frame    = document.getElementById('pbi-frame');
+    const arcEl    = document.getElementById('ring-arc');
+    const countEl  = document.getElementById('countdown-txt');
+    const flash    = document.getElementById('flash');
+    let remaining  = INTERVAL;
+    function updateRing(sec) {
+      arcEl.style.strokeDashoffset = CIRCUMF * (1 - sec / INTERVAL);
+      countEl.textContent = sec;
+    }
+    function doRefresh() {
+      flash.classList.add('go');
+      setTimeout(() => flash.classList.remove('go'), 200);
+      const src = frame.src;
+      frame.src = '';
+      setTimeout(() => { frame.src = src; }, 80);
+      remaining = INTERVAL;
+      updateRing(INTERVAL);
+    }
+    updateRing(INTERVAL);
+    setInterval(() => {
+      remaining--;
+      if (remaining <= 0) doRefresh();
+      else updateRing(remaining);
+    }, 1000);
+  </script>
+</body>
+</html>
