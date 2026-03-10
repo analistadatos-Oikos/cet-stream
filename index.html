@@ -1,31 +1,49 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Call CET Stream</title>
+  <script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #pbi-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: none; display: block; }
-    #badge { position: fixed; bottom: 18px; right: 18px; z-index: 999; background: rgba(10,14,30,0.82); backdrop-filter: blur(10px); border: 1px solid rgba(92,107,192,0.35); border-radius: 10px; padding: 7px 13px; display: flex; align-items: center; gap: 9px; font-family: 'Segoe UI', sans-serif; font-size: 0.72rem; color: rgba(232,234,246,0.75); letter-spacing: 0.06em; user-select: none; transition: opacity 0.3s; }
+    #report-container { position: fixed; inset: 0; width: 100%; height: 100%; }
+    #report-container iframe { border: none !important; }
+    #badge {
+      position: fixed; bottom: 18px; right: 18px; z-index: 999;
+      background: rgba(10,14,30,0.82); backdrop-filter: blur(10px);
+      border: 1px solid rgba(92,107,192,0.35); border-radius: 10px;
+      padding: 7px 13px; display: flex; align-items: center; gap: 9px;
+      font-family: 'Segoe UI', sans-serif; font-size: 0.72rem;
+      color: rgba(232,234,246,0.75); letter-spacing: 0.06em;
+      user-select: none; transition: opacity 0.3s;
+    }
     #badge:hover { opacity: 0.4; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; box-shadow: 0 0 0 0 rgba(76,175,80,0.7); animation: pulse 1.4s ease infinite; flex-shrink: 0; }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(76,175,80,0.7); } 70% { box-shadow: 0 0 0 7px rgba(76,175,80,0); } 100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); } }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #4caf50;
+      box-shadow: 0 0 0 0 rgba(76,175,80,0.7);
+      animation: pulse 1.4s ease infinite; flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(76,175,80,0.7); }
+      70%  { box-shadow: 0 0 0 7px rgba(76,175,80,0); }
+      100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); }
+    }
     .ring-wrap { position: relative; width: 22px; height: 22px; flex-shrink: 0; }
     .ring-wrap svg { transform: rotate(-90deg); }
     .ring-bg  { fill: none; stroke: rgba(92,107,192,0.18); stroke-width: 2.5; }
-    .ring-arc { fill: none; stroke: #5c6bc0; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 56.5; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
-    #countdown-txt { font-variant-numeric: tabular-nums; min-width: 22px; text-align: center; }
-    #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 998; transition: opacity 0.15s ease; }
-    #flash.go { opacity: 0.12; }
+    .ring-arc {
+      fill: none; stroke: #5c6bc0; stroke-width: 2.5; stroke-linecap: round;
+      stroke-dasharray: 56.5; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;
+    }
+    #status-txt { font-size: 0.65rem; color: rgba(232,234,246,0.45); }
   </style>
 </head>
 <body>
-  <div id="flash"></div>
-  <iframe id="pbi-frame" title="Call CET Stream"
-    src=https://app.powerbi.com/reportEmbed?reportId=bfdf7542-7321-4464-9de3-49d2a0e2256b&autoAuth=true&ctid=fe750c00-52ec-499e-969c-4d4c3900969f
-    allowfullscreen="true" loading="eager"></iframe>
+
+  <div id="report-container"></div>
+
   <div id="badge">
     <div class="dot"></div>
     <span>LIVE</span>
@@ -36,28 +54,57 @@
       </svg>
     </div>
     <span>Refresh en <span id="countdown-txt">60</span>s</span>
+    <span id="status-txt"></span>
   </div>
+
   <script>
-    const INTERVAL = 60;
-    const CIRCUMF  = 56.5;
-    const frame    = document.getElementById('pbi-frame');
+    const REPORT_ID  = 'bfdf7542-7321-4464-9de3-49d2a0e2256b';
+    const TENANT_ID  = 'fe750c00-52ec-499e-969c-4d4c3900969f';
+    const INTERVAL   = 60;
+    const CIRCUMF    = 56.5;
+
+    // Embed con SDK de Power BI
+    const models    = window['powerbi-client'].models;
+    const container = document.getElementById('report-container');
+
+    const config = {
+      type: 'report',
+      id: REPORT_ID,
+      embedUrl: `https://app.powerbi.com/reportEmbed?reportId=${REPORT_ID}&ctid=${TENANT_ID}`,
+      accessToken: undefined,        // usará la sesión del navegador
+      tokenType: models.TokenType.Aad,
+      settings: {
+        panes: { filters: { visible: false }, pageNavigation: { visible: true } },
+        background: models.BackgroundType.Transparent,
+      }
+    };
+
+    const report = window.powerbi.embed(container, config);
+
+    // Cuenta regresiva y refresh SIN parpadeo
     const arcEl    = document.getElementById('ring-arc');
     const countEl  = document.getElementById('countdown-txt');
-    const flash    = document.getElementById('flash');
+    const statusEl = document.getElementById('status-txt');
     let remaining  = INTERVAL;
+
     function updateRing(sec) {
       arcEl.style.strokeDashoffset = CIRCUMF * (1 - sec / INTERVAL);
       countEl.textContent = sec;
     }
-    function doRefresh() {
-      flash.classList.add('go');
-      setTimeout(() => flash.classList.remove('go'), 200);
-      const src = frame.src;
-      frame.src = '';
-      setTimeout(() => { frame.src = src; }, 80);
+
+    async function doRefresh() {
       remaining = INTERVAL;
       updateRing(INTERVAL);
+      statusEl.textContent = '↻';
+      try {
+        await report.refresh();          // 🔑 Refresca SOLO los datos, sin recargar iframe
+        statusEl.textContent = '✓';
+        setTimeout(() => statusEl.textContent = '', 2000);
+      } catch(e) {
+        statusEl.textContent = '!';
+      }
     }
+
     updateRing(INTERVAL);
     setInterval(() => {
       remaining--;
